@@ -4,6 +4,13 @@ class Game {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
         
+        this.isAssetsLoaded = false;
+        this.assetsLoaded = 0;
+        this.totalAssets = 0;
+        
+        // 디버깅을 위한 로그 추가
+        console.log('게임 초기화 시작');
+        
         this.setupCanvas();
         this.loadAssets();
         
@@ -33,6 +40,7 @@ class Game {
         this.maxSentences = 8; // 8문장이 되면 게임 종료
         this.currentSentence = null;
         this.wordParticles = [];
+        this.fireParticles = []; // 불꽃 파티클 배열 추가
         
         this.setupEvents();
         
@@ -169,6 +177,13 @@ class Game {
         this.canvas.width = window.innerWidth;
         this.canvas.height = window.innerHeight;
         
+        // 캔버스가 보이는지 디버깅
+        console.log(`캔버스 크기: ${this.canvas.width}x${this.canvas.height}`);
+        
+        // 초기 화면 채우기
+        this.ctx.fillStyle = 'blue'; // 디버깅을 위해 파란색으로 시작
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
         // 화면 크기가 변경되면 캔버스 크기도 조정
         window.addEventListener('resize', () => {
             this.canvas.width = window.innerWidth;
@@ -181,8 +196,18 @@ class Game {
     }
     
     loadAssets() {
+        // 이미지 로드 성공 여부 확인을 위한 카운터
+        this.totalAssets = 11; // 플레이어 1장 + 적 이미지 10장
+        
         // 플레이어 이미지 로드
         this.playerImage = new Image();
+        this.playerImage.onload = () => {
+            console.log('플레이어 이미지 로드 성공');
+            this.checkAllAssetsLoaded();
+        };
+        this.playerImage.onerror = (e) => {
+            console.error('플레이어 이미지 로드 실패:', e);
+        };
         this.playerImage.src = 'images/player.png';
         
         // 적 이미지 로드 (10개의 다른 적 이미지)
@@ -190,6 +215,13 @@ class Game {
         const enemyTypes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
         enemyTypes.forEach(num => {
             const img = new Image();
+            img.onload = () => {
+                console.log(`적 이미지 ${num} 로드 성공`);
+                this.checkAllAssetsLoaded();
+            };
+            img.onerror = (e) => {
+                console.error(`적 이미지 ${num} 로드 실패:`, e);
+            };
             img.src = `images/enemy${num}.png`;
             this.enemyImages.push(img);
         });
@@ -204,6 +236,44 @@ class Game {
         // 배경음악 설정
         this.sounds.background.loop = true;
         this.sounds.background.volume = 0.5;
+    }
+    
+    // 모든 이미지가 로드되었는지 체크
+    checkAllAssetsLoaded() {
+        this.assetsLoaded++;
+        if (this.assetsLoaded >= this.totalAssets) {
+            this.isAssetsLoaded = true;
+            console.log('모든 이미지 로드 완료');
+            // 테스트용 렌더링
+            this.testRender();
+        }
+    }
+    
+    // 테스트 렌더링 - 이미지가 제대로 로드되었는지 확인
+    testRender() {
+        this.ctx.fillStyle = 'black';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // 플레이어 이미지 테스트
+        this.ctx.drawImage(
+            this.playerImage,
+            this.canvas.width / 2 - 25,
+            this.canvas.height - 100,
+            50,
+            50
+        );
+        
+        // 적 이미지 테스트
+        for (let i = 0; i < this.enemyImages.length; i++) {
+            const x = 30 + (i * 60);
+            this.ctx.drawImage(
+                this.enemyImages[i],
+                x,
+                100,
+                40,
+                40
+            );
+        }
     }
     
     setupEvents() {
@@ -257,6 +327,11 @@ class Game {
     }
     
     startGame() {
+        if (!this.isAssetsLoaded) {
+            console.log('아직 모든 이미지가 로드되지 않았습니다.');
+            return;
+        }
+        
         this.gameStarted = true;
         this.gameStartTime = Date.now();
         this.sounds.background.play().catch(error => console.log('배경 음악 재생 실패:', error));
@@ -271,6 +346,7 @@ class Game {
         this.enemies = [];
         this.completedSentences = [];
         this.wordParticles = [];
+        this.fireParticles = []; // 불꽃 파티클 초기화 추가
         this.currentSentence = null;
         this.englishSentences = this.getEnglishSentences();
         this.sounds.background.currentTime = 0;
@@ -405,8 +481,68 @@ class Game {
         }
     }
 
+    // 불꽃 파티클 생성 함수
+    createFireParticles(x, y) {
+        const particleCount = 80; // 불꽃 파티클 수
+        const colors = [
+            '#ff0000', '#ff3300', '#ff6600', '#ff9900', '#ffcc00', '#ffff00',
+            '#ffff33', '#ffff66', '#ffff99', '#ffffcc', '#ffffff', '#ff66ff',
+            '#ff33ff', '#ff00ff', '#cc00ff', '#9900ff', '#6600ff', '#3300ff'
+        ];
+
+        for (let i = 0; i < particleCount; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 0.5 + Math.random() * 3.5;
+            // 크기를 50% 줄임
+            const size = (2 + Math.random() * 3) * 0.5;
+            const lifespan = 1000 + Math.random() * 1500;
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            
+            this.fireParticles.push({
+                x: x,
+                y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                size: size,
+                color: color,
+                alpha: 1.0,
+                lifespan: lifespan,
+                decay: Math.random() * 0.02 + 0.01
+            });
+        }
+    }
+
+    // 불꽃 파티클 업데이트 함수
+    updateFireParticles(deltaTime) {
+        for (let i = this.fireParticles.length - 1; i >= 0; i--) {
+            const particle = this.fireParticles[i];
+            
+            // 위치 업데이트
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+            
+            // 중력 효과 (약하게)
+            particle.vy += 0.02;
+            
+            // 크기와 투명도 감소
+            particle.size *= 0.99;
+            particle.alpha -= particle.decay;
+            
+            // 수명 감소
+            particle.lifespan -= deltaTime;
+            
+            // 수명이 다하거나 완전히 투명해진 파티클 제거
+            if (particle.lifespan <= 0 || particle.alpha <= 0 || particle.size <= 0.5) {
+                this.fireParticles.splice(i, 1);
+            }
+        }
+    }
+
     // 단어 파티클을 생성하는 함수
     createWordParticles(x, y, sentence) {
+        // 화려한 불꽃 파티클 생성
+        this.createFireParticles(x, y);
+        
         const words = this.splitSentenceIntoWords(sentence);
         
         // 화면 중앙에 위치하도록 가로 위치 계산
@@ -416,6 +552,8 @@ class Game {
         const firstSentenceY = this.canvas.height - 100;
         const sentenceGap = 30;
         const finalY = firstSentenceY - (sentenceCount * sentenceGap);
+        
+        console.log(`새 문장 생성: "${sentence}", 위치: ${finalY}px`);
         
         // 각 단어의 최종 위치 계산을 위한 준비
         const wordCount = words.length;
@@ -512,6 +650,19 @@ class Game {
     }
     
     draw() {
+        if (!this.isAssetsLoaded) {
+            // 자산이 로드되지 않은 경우 로딩 메시지 표시
+            this.ctx.fillStyle = 'black';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            this.ctx.fillStyle = 'white';
+            this.ctx.font = '20px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('게임 리소스를 로딩 중입니다...', this.canvas.width / 2, this.canvas.height / 2);
+            this.ctx.fillText(`(${this.assetsLoaded}/${this.totalAssets})`, this.canvas.width / 2, this.canvas.height / 2 + 30);
+            return;
+        }
+        
         // 화면 지우기
         this.ctx.fillStyle = 'black';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -522,13 +673,17 @@ class Game {
         }
         
         // 플레이어 그리기
-        this.ctx.drawImage(
-            this.playerImage,
-            this.player.x,
-            this.player.y,
-            this.player.width,
-            this.player.height
-        );
+        try {
+            this.ctx.drawImage(
+                this.playerImage,
+                this.player.x,
+                this.player.y,
+                this.player.width,
+                this.player.height
+            );
+        } catch (e) {
+            console.error('플레이어 이미지 그리기 실패:', e);
+        }
         
         // 총알 그리기
         this.ctx.fillStyle = 'white';
@@ -538,14 +693,18 @@ class Game {
         
         // 적 그리기
         for (const enemy of this.enemies) {
-            if (this.enemyImages[enemy.imageIndex]) {
-                this.ctx.drawImage(
-                    this.enemyImages[enemy.imageIndex],
-                    enemy.x,
-                    enemy.y,
-                    enemy.width,
-                    enemy.height
-                );
+            try {
+                if (this.enemyImages[enemy.imageIndex]) {
+                    this.ctx.drawImage(
+                        this.enemyImages[enemy.imageIndex],
+                        enemy.x,
+                        enemy.y,
+                        enemy.width,
+                        enemy.height
+                    );
+                }
+            } catch (e) {
+                console.error(`적 이미지 그리기 실패: ${enemy.imageIndex}`, e);
             }
         }
         
@@ -558,6 +717,25 @@ class Game {
             this.ctx.translate(particle.x, particle.y);
             this.ctx.rotate(particle.rotation);
             this.ctx.fillText(particle.word, 0, 0);
+            this.ctx.restore();
+        }
+        
+        // 불꽃 파티클 그리기
+        for (const particle of this.fireParticles) {
+            this.ctx.save();
+            this.ctx.globalAlpha = particle.alpha;
+            this.ctx.fillStyle = particle.color;
+            this.ctx.beginPath();
+            this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // 불꽃에 빛나는 효과 추가
+            this.ctx.globalAlpha = particle.alpha * 0.5;
+            this.ctx.filter = 'blur(1px)';
+            this.ctx.beginPath();
+            this.ctx.arc(particle.x, particle.y, particle.size * 1.5, 0, Math.PI * 2);
+            this.ctx.fill();
+            
             this.ctx.restore();
         }
         
@@ -658,6 +836,9 @@ class Game {
                 
                 // 단어 파티클 업데이트
                 this.updateWordParticles();
+                
+                // 불꽃 파티클 업데이트
+                this.updateFireParticles(deltaTime);
             }
         }
         
@@ -671,5 +852,6 @@ class Game {
 
 // 페이지 로드 시 게임 인스턴스 생성
 window.addEventListener('load', () => {
+    console.log('페이지 로드 완료, 게임 초기화');
     new Game();
 });
